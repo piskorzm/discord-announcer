@@ -2,9 +2,11 @@ const { token } = require('./config.json');
 const { Client, GatewayIntentBits } = require('discord.js');
 const { joinVoiceChannel, createAudioPlayer, createAudioResource, NoSubscriberBehavior } = require('@discordjs/voice');
 const ytdl = require('ytdl-core');
+const fs = require('fs');
 
 const DEFAULT_SOUND = 'https://www.youtube.com/watch?v=10LsX1o9An0&ab_channel=Flank3RR';
 const TIMEOUT_MS = 7000;
+const REGISTERED_SOUNDS_FILE_PATH = './registered-sounds.json';
 
 const client = new Client({
   intents: [
@@ -15,14 +17,26 @@ const client = new Client({
     GatewayIntentBits.MessageContent
   ],
 });
-const registeredSounds = new Map();
+
+const registeredSounds = (() => {
+  try {
+    const data = fs.readFileSync(REGISTERED_SOUNDS_FILE_PATH);
+    return JSON.parse(data);
+  } catch (error) {
+    console.error('Error loading registered sounds:', error);
+    return {};
+  }
+})();
 
 client.once('ready', () => {
   console.log(`Logged in as ${client.user.tag}`);
 });
 
 client.on('messageCreate', async (message) => {
-  if (message.author.bot) return; // Ignore messages from bots
+  if (message.author.bot) {
+    // Ignore bot users
+    return;
+  }
 
   const args = message.content.trim().split(' ');
   const command = args.shift().toLowerCase();
@@ -30,6 +44,7 @@ client.on('messageCreate', async (message) => {
   if (command === '!add-sound') {
     const youtubeUrl = args.length >= 1 ? args[0] : undefined;
 
+    // Validate URL argument syntax
     if (!youtubeUrl || !ytdl.validateURL(youtubeUrl)) {
       message.reply('Please provide a valid YouTube URL.');
       return;
@@ -41,10 +56,15 @@ client.on('messageCreate', async (message) => {
       if (!videoInfo) {
         message.reply('The provided YouTube URL does not exist or cannot be accessed.');
         return;
-      }ł
+      }
 
-      registeredSounds.set(message.author.id, youtubeUrl);
-      console.log(`Sound registered for user: (id: ${message.author.id}, tag: ${message.author.tag}), url: ${youtubeUrl}`);
+      // Update the registeredSounds map
+      registeredSounds[message.author.tag] = youtubeUrl;
+
+      // Save the updated data to the JSON file
+      fs.writeFileSync(REGISTERED_SOUNDS_FILE_PATH, JSON.stringify(registeredSounds));
+
+      console.log(`Sound registered for user: ${message.author.tag}, url: ${youtubeUrl}`);
       message.reply('Your welcome sound has been registered!');
     } catch (error) {
       console.error(error);
@@ -61,8 +81,8 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
       return;
     }
 
-    let registeredSound = !!registeredSounds.get(newState.member.user.id) ?
-        registeredSounds.get(newState.member.user.id) : DEFAULT_SOUND;
+    let registeredSound = !!registeredSounds[newState.member.user.tag] ?
+        registeredSounds[newState.member.user.tag] : DEFAULT_SOUND;
 
     const connection = joinVoiceChannel({
       channelId: newState.channel.id,
@@ -86,6 +106,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
 
     connection.subscribe(audioPlayer);
 
+    // Schedule disconnect if the sound is too long
     setTimeout(() => {
       connection.destroy();
     }, TIMEOUT_MS);
