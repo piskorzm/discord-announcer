@@ -2,7 +2,9 @@ const { token } = require('./config.json');
 const { Client, GatewayIntentBits } = require('discord.js');
 const { joinVoiceChannel, createAudioPlayer, createAudioResource, NoSubscriberBehavior } = require('@discordjs/voice');
 const ytdl = require('ytdl-core');
-const ffmpeg = require('ffmpeg-static');
+
+const DEFAULT_SOUND = 'https://www.youtube.com/watch?v=10LsX1o9An0&ab_channel=Flank3RR';
+const TIMEOUT_MS = 7000;
 
 const client = new Client({
   intents: [
@@ -13,9 +15,6 @@ const client = new Client({
     GatewayIntentBits.MessageContent
   ],
 });
-
-const defaultSound = 'https://www.youtube.com/watch?v=rBuKH1jm1Q0&ab_channel=undefined';
-const timeoutMs = 5000;
 const registeredSounds = new Map();
 
 client.once('ready', () => {
@@ -29,16 +28,28 @@ client.on('messageCreate', async (message) => {
   const command = args.shift().toLowerCase();
 
   if (command === '!add-sound') {
-    console.log('registering sound')
-    const youtubeUrl = args[0];
+    const youtubeUrl = args.length >= 1 ? args[0] : undefined;
 
-    if (!youtubeUrl) {
+    if (!youtubeUrl || !ytdl.validateURL(youtubeUrl)) {
       message.reply('Please provide a valid YouTube URL.');
       return;
     }
 
-    registeredSounds.set(message.author.id, youtubeUrl);
-    message.reply('Your YouTube URL has been registered.');
+    // Fetch video info to further verify if the video exists
+    try {
+      const videoInfo = await ytdl.getInfo(youtubeUrl);
+      if (!videoInfo) {
+        message.reply('The provided YouTube URL does not exist or cannot be accessed.');
+        return;
+      }ł
+
+      registeredSounds.set(message.author.id, youtubeUrl);
+      console.log(`Sound registered for user: (id: ${message.author.id}, tag: ${message.author.tag}), url: ${youtubeUrl}`);
+      message.reply('Your welcome sound has been registered!');
+    } catch (error) {
+      console.error(error);
+      message.reply('An error occurred while fetching video information.');
+    }
   }
 });
 
@@ -51,7 +62,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
     }
 
     let registeredSound = !!registeredSounds.get(newState.member.user.id) ?
-        registeredSounds.get(newState.member.user.id) : defaultSound;
+        registeredSounds.get(newState.member.user.id) : DEFAULT_SOUND;
 
     const connection = joinVoiceChannel({
       channelId: newState.channel.id,
@@ -75,12 +86,13 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
 
     connection.subscribe(audioPlayer);
 
+    setTimeout(() => {
+      connection.destroy();
+    }, TIMEOUT_MS);
+
     audioPlayer.on('stateChange', (oldState, newState) => {
         if (newState.status === 'idle') {
-          // Automatically destroy the connection after 5 seconds
-          setTimeout(() => {
-            connection.destroy();
-          }, timeoutMs);
+          connection.destroy();
         }
     });
   }
