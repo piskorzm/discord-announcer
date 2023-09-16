@@ -108,12 +108,22 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
 
     // Schedule disconnect if the sound is too long
     setTimeout(() => {
-      connection.destroy();
+      try {
+        connection.destroy();
+      } catch(e) {
+        console.log(e)
+      }
     }, TIMEOUT_MS);
 
     audioPlayer.on('stateChange', (oldState, newState) => {
+      
+      console.log(connection.status)
         if (newState.status === 'idle') {
-          connection.destroy();
+          try {
+            connection.destroy();
+          } catch(e) {
+            console.log(e)
+          }
         }
     });
   }
@@ -121,3 +131,4 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
 
 // Log in to Discord with your client's token
 client.login(token);
+        
