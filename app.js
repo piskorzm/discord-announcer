@@ -7,7 +7,7 @@ const ffmpeg = require('fluent-ffmpeg');
 
 const AUDIO_CLIPS_PATH = './audio-clips';
 const DEFAULT_SOUND = AUDIO_CLIPS_PATH + '/default.mp4';
-const MAX_CLIP_DURATION = 10;
+const MAX_CLIP_DURATION = 7;
 
 const client = new Client({
   intents: [
@@ -26,6 +26,20 @@ if (!fs.existsSync(AUDIO_CLIPS_PATH)) {
   fs.mkdirSync(AUDIO_CLIPS_PATH);
 }
 
+function parseTimeToSeconds(timeString) {
+  if (!timeString.includes(':')) {
+    return Number(timeString);
+  }
+
+  const [minutes, seconds] = timeString.split(':').map(Number);
+
+  if (isNaN(minutes) || isNaN(seconds)) {
+    return 0;
+  }
+
+  return minutes * 60 + seconds;
+}
+
 client.once('ready', () => {
   console.log(`Logged in as ${client.user.tag}`);
 });
@@ -41,8 +55,8 @@ client.on('messageCreate', async (message) => {
 
   if (command === '!add-sound') {
     const youtubeUrl = args.length >= 1 ? args[0] : undefined;
-    const startTime = args.length >= 2 ? parseFloat(args[1]) : undefined;
-    const duration = args.length >= 3 && !!startTime && !!parseFloat(args[2]) ? parseFloat(args[2]) - startTime : undefined;
+    const startTime = args.length >= 2 ? parseTimeToSeconds(args[1]) : 0;
+    const duration = args.length >= 3 && !!parseTimeToSeconds(args[2]) ? parseTimeToSeconds(args[2]) - startTime : MAX_CLIP_DURATION;
 
     // Validate URL argument syntax
     if (!youtubeUrl || !ytdl.validateURL(youtubeUrl)) {
@@ -85,8 +99,8 @@ client.on('messageCreate', async (message) => {
       // Set input file
       command.input(fullAudioPath);
 
-      command.setStartTime(!!startTime ? startTime : 0);
-      command.setDuration(duration && duration < MAX_CLIP_DURATION ? duration : MAX_CLIP_DURATION)
+      command.setStartTime(startTime);
+      command.setDuration(duration)
 
       // Set output file path
       command.output(trimmedAudioFilePath);
@@ -140,7 +154,6 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
 
   if (membersInChannel === 0 && !!connections.get(channelId)) {
     // Disconnect the bot from the channel
-    console.log(client.voice);
     connections.get(channelId).destroy();
     connections.delete(channelId);
     console.log(`Bot disconnected from ${channel.name} due to no users.`);
