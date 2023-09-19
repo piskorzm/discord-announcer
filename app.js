@@ -7,8 +7,35 @@ const ffmpeg = require('fluent-ffmpeg');
 
 const AUDIO_CLIPS_PATH = './audio-clips';
 const DEFAULT_SOUND = AUDIO_CLIPS_PATH + '/default.mp4';
+const USER_SETTINGS_FILE_PATH = 'user-settings.json';
 const MAX_CLIP_DURATION_S = 10;
 const SOUND_PLAY_DELAY_MS = 800;
+
+/*
+const commands = [
+  new SlashCommandBuilder()
+    .setName('add-sound')
+    .setDescription(`Add a welcome sound to the server (max duration ${MAX_CLIP_DURATION_S}s). Parameters: youtubeUrl startTime(m:ss optional) endTime(m:ss optional)`)
+    .toJSON(),
+  new SlashCommandBuilder()
+  .setName('set-volume')
+  .setDescription('Set welcome sound volume. Parameters: volume(between 0.01 and 2.00)')
+  .toJSON(),
+].map(command => command.toJSON());
+const rest = new REST({ version: '10' }).setToken(TOKEN);
+*/
+
+
+// Read user settings from a file
+const userSettingsMap = (() => {
+  try {
+    const data = fs.readFileSync(USER_SETTINGS_FILE_PATH);
+    return JSON.parse(data);
+  } catch (error) {
+    console.error('Error loading registered sounds:', error);
+    return {};
+  }
+})();
 
 const client = new Client({
   intents: [
@@ -59,7 +86,7 @@ client.on('messageCreate', async (message) => {
   const command = args.shift().toLowerCase();
 
   if (command === '!add-sound') {
-    const youtubeUrl = args.length >= 1 ? args[0] : undefined;
+    const youtubeUrl = args.length >= 1 ? args[0] : null;
     const startTime = args.length >= 2 ? parseTimeToSeconds(args[1]) : 0;
     const duration = args.length >= 3 && !!parseTimeToSeconds(args[2]) ? parseTimeToSeconds(args[2]) - startTime : MAX_CLIP_DURATION_S;
 
@@ -125,9 +152,9 @@ client.on('messageCreate', async (message) => {
           }
         });
       })
-      .on('error', (err) => {
+      .on('error', (error) => {
         message.reply('An error occurred while trimming .');
-        console.error('Error:');
+        console.error('Error:' + error);
       })
       .run();
     });
@@ -141,15 +168,34 @@ client.on('messageCreate', async (message) => {
       message.reply('An error occurred while registering audio clip.');
     }
   }
+    
+  if (command === '!set-volume') {
+    const volume = args.length == 1 ?  Number(args[0]) : undefined;
+
+    // Validate volume value
+    if (!volume || volume > 2.0 || volume < 0.01) {
+      message.reply('Please provide a number between 0.01 and 2.00.');
+      return;
+    }
+
+    // Update the userSettings map
+    const newUserSettings = !!userSettingsMap[message.author.tag] ? userSettingsMap[message.author.tag] : {};
+    newUserSettings.volume = volume;
+    userSettingsMap[message.author.tag] = newUserSettings;
+
+    // Save user settings to a JSON file
+    fs.writeFileSync(USER_SETTINGS_FILE_PATH, JSON.stringify(userSettingsMap));
+    console.log(`Settings updated for user: ${message.author.tag}`);
+    console.log(newUserSettings);
+  }
 });
 
 client.on('voiceStateUpdate', async (oldState, newState) => {
-
   const channelId = newState.channelId || oldState.channelId;
   const channel = client.channels.cache.get(channelId);
 
   if (!channel) {
-    console.error('Channel not found');
+    console.error('Channel not found!');
     return;
   }
 
@@ -186,10 +232,13 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
       },
     });
 
-    const audioResource = createAudioResource(audioPath);
+    const audioResource = createAudioResource(audioPath, { inlineVolume: true });
+    const volume = !!userSettingsMap[newState.member.user.tag] ? Number(userSettingsMap[newState.member.user.tag].volume) : 1.0;
+    audioResource.volume.setVolume(volume);
+
     setTimeout(() => {
-      audioPlayer.play(audioResource);
       connection.subscribe(audioPlayer);
+      audioPlayer.play(audioResource);
     }, SOUND_PLAY_DELAY_MS)
   }
 });
