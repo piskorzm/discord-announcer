@@ -161,9 +161,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
     return;
   }
 
-  if (newState.channel && 
-      (oldState.mute === null || oldState.mute === newState.mute) && 
-      (oldState.deaf === null || oldState.deaf === newState.deaf)) {
+  if (newState.channel && (!oldState.channelId || oldState.channelId !== newState.channelId)) {
     // User joined a voice channel
     if (newState.member.user.bot) {
       // Ignore bot users
