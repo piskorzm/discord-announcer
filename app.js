@@ -40,6 +40,10 @@ function parseTimeToSeconds(timeString) {
   return minutes * 60 + seconds;
 }
 
+function getNonBotUserCount(channel) {
+  return channel.members.filter(member => !member.user.bot).size;
+}
+
 client.once('ready', () => {
   console.log(`Logged in as ${client.user.tag}`);
 });
@@ -149,10 +153,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
   }
 
   // Check if there are no users left in the channel
-  const membersInChannel = channel.members.filter(member => !member.user.bot).size;
-  console.log(membersInChannel)
-
-  if (membersInChannel === 0 && !!connections.get(channelId)) {
+  if (getNonBotUserCount(channel) === 0 && !!connections.get(channelId)) {
     // Disconnect the bot from the channel
     connections.get(channelId).destroy();
     connections.delete(channelId);
@@ -160,7 +161,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
     return;
   }
 
-  if (newState.channel) {
+  if ((oldState.mute === null || oldState.mute === newState.mute) && (oldState.deaf === null || oldState.deaf === newState.deaf)) {
     // User joined a voice channel
     if (newState.member.user.bot) {
       // Ignore bot users
@@ -189,12 +190,6 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
     audioPlayer.play(audioResource);
 
     connection.subscribe(audioPlayer);
-
-    audioPlayer.on('stateChange', (oldState, newState) => {
-      if (newState.status === 'idle') {
-        audioPlayer.stop();
-      }
-    });
   }
 });
 
