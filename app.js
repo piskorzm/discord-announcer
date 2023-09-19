@@ -7,7 +7,8 @@ const ffmpeg = require('fluent-ffmpeg');
 
 const AUDIO_CLIPS_PATH = './audio-clips';
 const DEFAULT_SOUND = AUDIO_CLIPS_PATH + '/default.mp4';
-const MAX_CLIP_DURATION = 7;
+const MAX_CLIP_DURATION_S = 10;
+const SOUND_PLAY_DELAY_MS = 800;
 
 const client = new Client({
   intents: [
@@ -60,7 +61,7 @@ client.on('messageCreate', async (message) => {
   if (command === '!add-sound') {
     const youtubeUrl = args.length >= 1 ? args[0] : undefined;
     const startTime = args.length >= 2 ? parseTimeToSeconds(args[1]) : 0;
-    const duration = args.length >= 3 && !!parseTimeToSeconds(args[2]) ? parseTimeToSeconds(args[2]) - startTime : MAX_CLIP_DURATION;
+    const duration = args.length >= 3 && !!parseTimeToSeconds(args[2]) ? parseTimeToSeconds(args[2]) - startTime : MAX_CLIP_DURATION_S;
 
     // Validate URL argument syntax
     if (!youtubeUrl || !ytdl.validateURL(youtubeUrl)) {
@@ -184,12 +185,12 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
         noSubscriber: NoSubscriberBehavior.Pause,
       },
     });
-          
+
     const audioResource = createAudioResource(audioPath);
-
-    audioPlayer.play(audioResource);
-
-    connection.subscribe(audioPlayer);
+    setTimeout(() => {
+      audioPlayer.play(audioResource);
+      connection.subscribe(audioPlayer);
+    }, SOUND_PLAY_DELAY_MS)
   }
 });
 
