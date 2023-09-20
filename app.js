@@ -58,15 +58,14 @@ client.once(Events.ClientReady, () => {
 
     // Register app commands on server
     try {
-        console.log('Started refreshing application (/) commands.');
-        console.log(client.user.id);
+        console.log('Started refreshing application commands.');
 
         const rest = new REST().setToken(TOKEN);
         rest.put(
             Routes.applicationCommands(client.user.id),
             { body: commands },
         ).then(() => {
-            console.log('Successfully reloaded application (/) commands.');
+            console.log('Successfully reloaded application commands.');
         }).catch(console.error);
     } catch (error) {
         console.error(error);
@@ -74,8 +73,9 @@ client.once(Events.ClientReady, () => {
 });
 
 client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
-    const channelId = newState.channelId || oldState.channelId;
-    const channel = client.channels.cache.get(channelId);
+    const guild = newState.guild || oldState.guild;
+    const channel = newState.channel || oldState.channel;
+    const connectionKey = guild.id + channel.id;
 
     if (!channel) {
         console.error('Channel not found!');
@@ -83,10 +83,10 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
     }
 
     // Check if there are no users left in the channel
-    if (channel.members.filter(member => !member.user.bot).size === 0 && !!connections.get(channelId)) {
+    if (channel.members.filter(member => !member.user.bot).size === 0 && !!connections.get(connectionKey)) {
         // Disconnect the bot from the channel
-        connections.get(channelId).destroy();
-        connections.delete(channelId);
+        connections.get(connectionKey).destroy();
+        connections.delete(connectionKey);
         console.log(`Bot disconnected from ${channel.name} due to no users.`);
         return;
     }
@@ -107,7 +107,7 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
             adapterCreator: newState.guild.voiceAdapterCreator,
         });
 
-        connections.set(channelId, connection);
+        connections.set(connectionKey, connection);
 
         const audioPlayer = createAudioPlayer({
             behaviors: {
