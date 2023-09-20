@@ -122,7 +122,7 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
         setTimeout(() => {
             connection.subscribe(audioPlayer);
             audioPlayer.play(audioResource);
-            console.log(`Playing sound for ${client.user.tag}`);
+            console.log(`Playing sound for ${newState.member.user.tag}`);
         }, SOUND_PLAY_DELAY_MS)
     }
 });
@@ -138,9 +138,11 @@ client.on(Events.InteractionCreate, async interaction => {
 	}
 
 	try {
+        // Pass extra settings to the command
         interaction.userSettingsMap = userSettingsMap;
         interaction.userSettingsFilePath = USER_SETTINGS_FILE_PATH;
         interaction.audioClipsPath = AUDIO_CLIPS_PATH;
+
 		await command.execute(interaction);
 	} catch (error) {
 		console.error(error);
