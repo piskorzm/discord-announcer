@@ -57,7 +57,7 @@ client.once(Events.ClientReady, () => {
     console.log(`Logged in as ${client.user.tag}!`);
 
     // Register app commands on server
-    try {
+    /*try {
         console.log('Started refreshing application commands.');
 
         const rest = new REST().setToken(TOKEN);
@@ -69,7 +69,7 @@ client.once(Events.ClientReady, () => {
         }).catch(console.error);
     } catch (error) {
         console.error(error);
-    }
+    }*/
 });
 
 client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
