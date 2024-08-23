@@ -14,8 +14,8 @@ module.exports = {
         .setName('add-sound')
         .setDescription('Adds your welcome sound to the server! Max duration: ' + MAX_CLIP_DURATION_S + 's')
         .addStringOption(option => option.setName(YOUTUBE_URL_OPTION).setDescription('Youtube video source for your sound').setRequired(true))
-        .addStringOption(option => option.setName(START_TIME_OPTION).setDescription('Start point (optional). Format: mm:ss'))
-        .addStringOption(option => option.setName(END_TIME_OPTION).setDescription('End point (optional). Format: mm:ss')),
+        .addStringOption(option => option.setName(START_TIME_OPTION).setDescription('Start point (optional). Format: mm:ss.mmm'))
+        .addStringOption(option => option.setName(END_TIME_OPTION).setDescription('End point (optional). Format: mm:ss.mmm')),
     async execute(interaction) {
         console.log("interaction.options");
         console.log(interaction.options.get(YOUTUBE_URL_OPTION));
