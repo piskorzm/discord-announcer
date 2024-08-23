@@ -1,10 +1,10 @@
 
 const { SlashCommandBuilder } = require('discord.js');
 const ffmpeg = require('fluent-ffmpeg');
-const ytdl = require('ytdl-core');
+const ytdl = require('@distube/ytdl-core');
 const fs = require('fs');
 
-const MAX_CLIP_DURATION_S = 10;
+const MAX_CLIP_DURATION_S = 20;
 const YOUTUBE_URL_OPTION = 'youtube-url';
 const START_TIME_OPTION = 'start-time';
 const END_TIME_OPTION = 'end-time';
@@ -49,14 +49,17 @@ module.exports = {
             const trimmedAudioFilePath = `${interaction.audioClipsPath}/${interaction.user.tag}.mp4`;
 
             interaction.reply('Downloading audio clip...');
-            const audioFile = ytdl(youtubeUrl, { filter: 'audioonly', format: 'mp4' });
+            const audioFile = ytdl(youtubeUrl, { filter: 'audioonly' });
+
             audioFile.pipe(fs.createWriteStream(fullAudioPath));
+
             audioFile.on('progress', (chunkLength, downloaded, total) => {
                 const percent = downloaded / total * 100;
                 process.stdout.clearLine();
                 process.stdout.cursorTo(0);
                 process.stdout.write(`Downloading... ${percent.toFixed(2)}%`);
             });
+
             audioFile.on('finish', () => {
                 // Create an FFmpeg command
                 const command = ffmpeg();
@@ -87,14 +90,16 @@ module.exports = {
                     })
                     .run();
             });
+
             audioFile.on('error', (err) => {
+                console.log("tuuuuutaj");
                 interaction.reply('An error occurred while downloading audio clip.');
                 console.error('Error during download:', err);
             })
 
         } catch (error) {
+            interaction.reply('An error occurred while registering audio clip.');
             console.error(error);
-            message.reply('An error occurred while registering audio clip.');
         }
     },
 };
