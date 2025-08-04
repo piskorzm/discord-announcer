@@ -27,19 +27,23 @@ module.exports = {
 
         // Validate URL argument syntax
         if (!youtubeUrl || !ytdl.validateURL(youtubeUrl)) {
-            interaction.reply('Please provide a valid YouTube URL.');
+            await interaction.reply('Please provide a valid YouTube URL.');
             return;
         }
 
         if (!!duration && duration < 0) {
-            interaction.reply('End time can not be before start time.');
+            await interaction.reply('End time can not be before start time.');
+            return;
         }
 
         // Fetch video info to further verify if the video exists
         try {
+
+            await interaction.reply('Downloading audio clip...');
+
             const videoInfo = await ytdl.getInfo(youtubeUrl);
             if (!videoInfo) {
-                interaction.reply('The provided YouTube URL does not exist or cannot be accessed.');
+                await interaction.reply('The provided YouTube URL does not exist or cannot be accessed.');
                 return;
             }
 
@@ -48,7 +52,6 @@ module.exports = {
 
             const trimmedAudioFilePath = `${interaction.audioClipsPath}/${interaction.user.tag}.mp4`;
 
-            interaction.reply('Downloading audio clip...');
             const audioFile = ytdl(youtubeUrl, { filter: 'audioonly' });
 
             audioFile.pipe(fs.createWriteStream(fullAudioPath));
@@ -85,19 +88,19 @@ module.exports = {
                     });
                 })
                     .on('error', (error) => {
-                        interaction.reply('An error occurred while trimming .');
+                        interaction.followUp('An error occurred while trimming .');
                         console.error('Error:' + error);
                     })
                     .run();
             });
 
             audioFile.on('error', (err) => {
-                interaction.reply('An error occurred while downloading audio clip.');
+                interaction.followUp('An error occurred while downloading audio clip.');
                 console.error('Error during download:', err);
             })
 
         } catch (error) {
-            interaction.reply('An error occurred while registering audio clip.');
+            await interaction.reply('An error occurred while registering audio clip.');
             console.error(error);
         }
     },
