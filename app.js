@@ -10,6 +10,7 @@ const AUDIO_CLIPS_PATH = './audio-clips';
 const DEFAULT_SOUND_PATH = AUDIO_CLIPS_PATH + '/default.mp4';
 const USER_SETTINGS_FILE_PATH = 'user-settings.json';
 const SOUND_PLAY_DELAY_MS = 800;
+const DEFAULT_VOLUME = 0.5;
 
 // Create the tempVideoFolder if it doesn't exist
 if (!fs.existsSync(AUDIO_CLIPS_PATH)) {
@@ -72,87 +73,128 @@ client.once(Events.ClientReady, () => {
     }*/
 });
 
+
 client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
-    const guild = newState.guild || oldState.guild;
-    const channel = newState.channel || oldState.channel;
-    const connectionKey = guild.id + channel.id;
+    const user = newState.member || oldState.member;
 
-    if (!channel) {
-        console.error('Channel not found!');
+    // Ignore bot users
+    if (!user || user.user.bot) {
         return;
     }
 
-    // Check if there are no users left in the channel
-    if (channel.members.filter(member => !member.user.bot).size === 0 && !!connections.get(connectionKey)) {
-        // Disconnect the bot from the channel
-        connections.get(connectionKey).destroy();
-        connections.delete(connectionKey);
-        console.log(`Bot disconnected from ${channel.name} due to no users.`);
+    // User joined a voice channel
+    if (oldState.channel === null && newState.channel !== null) {
+        console.log(`${user.user.tag} joined ${newState.channel.name}`);
+        playSoundForUser(user, newState.channel);
         return;
     }
 
-    if (newState.channel && (!oldState.channelId || oldState.channelId !== newState.channelId)) {
-        // User joined a voice channel
-        if (newState.member.user.bot) {
-            // Ignore bot users
-            return;
+    // User left a voice channel
+    if (oldState.channel !== null && newState.channel === null) {
+        console.log(`${user.user.tag} left ${oldState.channel.name}`);
+        // Destroy connection if bot is alone in the channel
+        if (oldState.channel.members.filter(member => !member.user.bot).size === 0) {
+            console.log(`Bot is alone in ${oldState.channel.name}, destroying connection`);
+            destroyConnection(oldState.channel.guild.id + oldState.channel.id);
         }
+        return;
+    }
 
-        const userAudioPath = `${AUDIO_CLIPS_PATH}/${newState.member.user.tag}.mp4`;
-        const audioPath = fs.existsSync(userAudioPath) ? userAudioPath : DEFAULT_SOUND_PATH;
-
-        const connection = joinVoiceChannel({
-            channelId: newState.channel.id,
-            guildId: newState.guild.id,
-            adapterCreator: newState.guild.voiceAdapterCreator,
-        });
-
-        connections.set(connectionKey, connection);
-
-        const audioPlayer = createAudioPlayer({
-            behaviors: {
-                noSubscriber: NoSubscriberBehavior.Pause,
-            },
-        });
-
-        const audioResource = createAudioResource(audioPath, { inlineVolume: true });
-        const volume = !!userSettingsMap[newState.member.user.tag] ? userSettingsMap[newState.member.user.tag].volume : 1.0;
-        audioResource.volume.setVolume(volume);
-
-        setTimeout(() => {
-            connection.subscribe(audioPlayer);
-            audioPlayer.play(audioResource);
-            console.log(`Playing sound for ${newState.member.user.tag}`);
-        }, SOUND_PLAY_DELAY_MS)
+    if (oldState.channel !== null && newState.channel !== null && oldState.channelId !== newState.channelId) {
+        console.log(`${user.user.tag} moved from ${oldState.channel.name} to ${newState.channel.name}`);
+        playSoundForUser(user, newState.channel);
+        return;
     }
 });
 
 // Handle commands
 client.on(Events.InteractionCreate, async interaction => {
-	if (!interaction.isChatInputCommand()) return;
-	const command = interaction.client.commands.get(interaction.commandName);
+    if (!interaction.isChatInputCommand()) return;
+    const command = interaction.client.commands.get(interaction.commandName);
 
-	if (!command) {
-		console.error(`No command matching ${interaction.commandName} was found.`);
-		return;
-	}
+    if (!command) {
+        console.error(`No command matching ${interaction.commandName} was found.`);
+        return;
+    }
 
-	try {
+    try {
         // Pass extra settings to the command
         interaction.userSettingsMap = userSettingsMap;
         interaction.userSettingsFilePath = USER_SETTINGS_FILE_PATH;
         interaction.audioClipsPath = AUDIO_CLIPS_PATH;
 
-		await command.execute(interaction);
-	} catch (error) {
-		console.error(error);
-		if (interaction.replied || interaction.deferred) {
-			await interaction.followUp({ content: 'There was an error while executing this command!', ephemeral: true });
-		} else {
-			await interaction.reply({ content: 'There was an error while executing this command!', ephemeral: true });
-		}
-	}
+        await command.execute(interaction);
+    } catch (error) {
+        console.error(error);
+        if (interaction.replied || interaction.deferred) {
+            await interaction.followUp({ content: 'There was an error while executing this command!', ephemeral: true });
+        } else {
+            await interaction.reply({ content: 'There was an error while executing this command!', ephemeral: true });
+        }
+    }
 });
 
 // Log in to Discord with bot token
 client.login(TOKEN);
+
+// Play sound for a user in a voice channel
+function playSoundForUser(user, channel) {
+    const connectionKey = channel.guild.id + channel.id;
+    const userTag = user.user.tag;
+
+    destroyAllOtherConnections(connectionKey);
+
+    if (!connections.get(connectionKey)) {
+        const connection = joinVoiceChannel({
+            channelId: channel.id,
+            guildId: channel.guild.id,
+            adapterCreator: channel.guild.voiceAdapterCreator,
+        });
+        
+        connections.set(connectionKey, connection);
+    }
+    
+    const connection = connections.get(connectionKey);
+    
+    const audioPlayer = createAudioPlayer({
+        behaviors: {
+            noSubscriber: NoSubscriberBehavior.Pause,
+        },
+    });
+
+    const audioResource = createAudioResourceForUser(userTag);
+
+    setTimeout(() => {
+        connection.subscribe(audioPlayer);
+        audioPlayer.play(audioResource);
+        console.log(`Playing sound for ${userTag}`);
+    }, SOUND_PLAY_DELAY_MS)
+}
+
+// Destroy all other connections except for the one with the given connectionKey
+function destroyAllOtherConnections(connectionKey) {
+    connections.forEach((connection, key) => {
+        if (key !== connectionKey) {
+            connection.destroy();
+            connections.delete(key);
+        }
+    });
+}
+
+// Destroy the connection with the given connectionKey
+function destroyConnection(connectionKey) {
+    const connection = connections.get(connectionKey);
+    connection.destroy();
+    connections.delete(connectionKey);
+}
+
+// Create an audio resource for a user from the audio clips folder
+function createAudioResourceForUser(userTag) {
+    const userAudioPath = `${AUDIO_CLIPS_PATH}/${userTag}.mp4`;
+    const audioPath = fs.existsSync(userAudioPath) ? userAudioPath : DEFAULT_SOUND_PATH;
+    const audioResource = createAudioResource(audioPath, { inlineVolume: true });
+    const volume = !!userSettingsMap[userTag] ? userSettingsMap[userTag].volume : DEFAULT_VOLUME;
+    audioResource.volume.setVolume(volume);
+
+    return audioResource;
+}

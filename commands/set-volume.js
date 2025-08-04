@@ -4,7 +4,7 @@ const fs = require('fs');
 
 const VOLUME_OPTION = 'volume';
 const MIN_VOLUME = 0.01;
-const MAX_VOLUME = 5.0;
+const MAX_VOLUME = 1.0;
 
 module.exports = {
     data: new SlashCommandBuilder()

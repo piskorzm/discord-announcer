@@ -92,7 +92,6 @@ module.exports = {
             });
 
             audioFile.on('error', (err) => {
-                console.log("tuuuuutaj");
                 interaction.reply('An error occurred while downloading audio clip.');
                 console.error('Error during download:', err);
             })
