@@ -77,8 +77,18 @@ client.once(Events.ClientReady, () => {
 client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
     const user = newState.member || oldState.member;
 
-    // Ignore bot users
-    if (!user || user.user.bot) {
+    // Ignore if user is not found
+    if (!user) {
+        return;
+    }
+
+    // Don't play sound for bot users
+    if (user.user.bot) {
+        // Destroy connection if bot user was moved to an empty channel
+        if (newState.channel !== null && onlyBotInChannel(newState.channel)) {
+            console.log(`Bot is alone in ${newState.channel.name}, destroying connection`);
+            destroyConnection(newState.channel.guild.id + newState.channel.id);
+        }
         return;
     }
 
@@ -93,13 +103,14 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
     if (oldState.channel !== null && newState.channel === null) {
         console.log(`${user.user.tag} left ${oldState.channel.name}`);
         // Destroy connection if bot is alone in the channel
-        if (oldState.channel.members.filter(member => !member.user.bot).size === 0) {
+        if (onlyBotInChannel(oldState.channel)) {
             console.log(`Bot is alone in ${oldState.channel.name}, destroying connection`);
             destroyConnection(oldState.channel.guild.id + oldState.channel.id);
         }
         return;
     }
 
+    // User moved to a different channel
     if (oldState.channel !== null && newState.channel !== null && oldState.channelId !== newState.channelId) {
         console.log(`${user.user.tag} moved from ${oldState.channel.name} to ${newState.channel.name}`);
         playSoundForUser(user, newState.channel);
@@ -197,4 +208,9 @@ function createAudioResourceForUser(userTag) {
     audioResource.volume.setVolume(volume);
 
     return audioResource;
+}
+
+// Check if the channel has only bot users
+function onlyBotInChannel(channel) {
+    return channel.members.filter(member => !member.user.bot).size === 0;
 }
