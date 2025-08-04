@@ -153,11 +153,6 @@ function playSoundForUser(user, channel) {
 
     var connection = getVoiceConnection(channel.guildId);
 
-    if (connection) {
-    console.log(connection.joinConfig.channelId)
-    console.log(channel.id)
-    }
-
     if (!connection) {
         connection = joinVoiceChannel({
             channelId: channel.id,
