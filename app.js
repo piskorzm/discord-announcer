@@ -1,6 +1,6 @@
 const { TOKEN } = require('./config.json');
 const { Client, GatewayIntentBits, Events } = require('discord.js');
-const { joinVoiceChannel, createAudioPlayer, createAudioResource, NoSubscriberBehavior } = require('@discordjs/voice');
+const { joinVoiceChannel, createAudioPlayer, createAudioResource, NoSubscriberBehavior, getVoiceConnection } = require('@discordjs/voice');
 const { REST } = require('@discordjs/rest');
 const { Routes } = require('discord-api-types/v9');
 const fs = require('fs');
@@ -10,7 +10,7 @@ const AUDIO_CLIPS_PATH = './audio-clips';
 const DEFAULT_SOUND_PATH = AUDIO_CLIPS_PATH + '/default.mp4';
 const USER_SETTINGS_FILE_PATH = 'user-settings.json';
 const SOUND_PLAY_DELAY_MS = 800;
-const DEFAULT_VOLUME = 0.2;
+const DEFAULT_VOLUME = 0.1;
 
 // Create the tempVideoFolder if it doesn't exist
 if (!fs.existsSync(AUDIO_CLIPS_PATH)) {
@@ -30,7 +30,6 @@ const userSettingsMap = (() => {
 
 const commandFiles = fs.readdirSync(COMMANDS_FOLDER_PATH).filter(file => file.endsWith('.js'));
 const commands = [];
-const connections = new Map();
 
 const client = new Client({
     intents: [
@@ -75,10 +74,10 @@ client.once(Events.ClientReady, () => {
 
 
 client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
-    const user = newState.member || oldState.member;
+    const user = newState.member;
 
     // Ignore if user is not found
-    if (!user) {
+    if (!user || !user.user) {
         return;
     }
 
@@ -87,7 +86,7 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
         // Destroy connection if bot user was moved to an empty channel
         if (newState.channel !== null && onlyBotInChannel(newState.channel)) {
             console.log(`Bot is alone in ${newState.channel.name}, destroying connection`);
-            destroyConnection(newState.channel.guild.id + newState.channel.id);
+            getVoiceConnection(newState.channel.guildId).destroy();
         }
         return;
     }
@@ -105,7 +104,7 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
         // Destroy connection if bot is alone in the channel
         if (onlyBotInChannel(oldState.channel)) {
             console.log(`Bot is alone in ${oldState.channel.name}, destroying connection`);
-            destroyConnection(oldState.channel.guild.id + oldState.channel.id);
+            getVoiceConnection(oldState.channel.guildId).destroy();
         }
         return;
     }
@@ -150,23 +149,31 @@ client.login(TOKEN);
 
 // Play sound for a user in a voice channel
 function playSoundForUser(user, channel) {
-    const connectionKey = channel.guild.id + channel.id;
     const userTag = user.user.tag;
 
-    destroyAllOtherConnections(connectionKey);
+    var connection = getVoiceConnection(channel.guildId);
 
-    if (!connections.get(connectionKey)) {
-        const connection = joinVoiceChannel({
+    if (connection) {
+    console.log(connection.joinConfig.channelId)
+    console.log(channel.id)
+    }
+
+    if (!connection) {
+        connection = joinVoiceChannel({
             channelId: channel.id,
             guildId: channel.guild.id,
             adapterCreator: channel.guild.voiceAdapterCreator,
         });
-        
-        connections.set(connectionKey, connection);
+    } 
+    else if (connection.joinConfig.channelId !== channel.id) {
+        connection.destroy();
+        connection = joinVoiceChannel({
+            channelId: channel.id,
+            guildId: channel.guild.id,
+            adapterCreator: channel.guild.voiceAdapterCreator,
+        });
     }
-    
-    const connection = connections.get(connectionKey);
-    
+
     const audioPlayer = createAudioPlayer({
         behaviors: {
             noSubscriber: NoSubscriberBehavior.Pause,
@@ -182,23 +189,6 @@ function playSoundForUser(user, channel) {
     }, SOUND_PLAY_DELAY_MS)
 }
 
-// Destroy all other connections except for the one with the given connectionKey
-function destroyAllOtherConnections(connectionKey) {
-    connections.forEach((connection, key) => {
-        if (key !== connectionKey) {
-            connection.destroy();
-            connections.delete(key);
-        }
-    });
-}
-
-// Destroy the connection with the given connectionKey
-function destroyConnection(connectionKey) {
-    const connection = connections.get(connectionKey);
-    connection.destroy();
-    connections.delete(connectionKey);
-}
-
 // Create an audio resource for a user from the audio clips folder
 function createAudioResourceForUser(userTag) {
     const userAudioPath = `${AUDIO_CLIPS_PATH}/${userTag}.mp4`;
@@ -212,5 +202,5 @@ function createAudioResourceForUser(userTag) {
 
 // Check if the channel has only bot users
 function onlyBotInChannel(channel) {
-    return channel.members.filter(member => !member.user.bot).size === 0;
+    return channel.members.filter(member => !member.user.bot).size === 0 && channel.members.filter(member => member.user.bot).size > 0;
 }
