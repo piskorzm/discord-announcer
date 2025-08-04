@@ -10,7 +10,7 @@ const AUDIO_CLIPS_PATH = './audio-clips';
 const DEFAULT_SOUND_PATH = AUDIO_CLIPS_PATH + '/default.mp4';
 const USER_SETTINGS_FILE_PATH = 'user-settings.json';
 const SOUND_PLAY_DELAY_MS = 800;
-const DEFAULT_VOLUME = 0.5;
+const DEFAULT_VOLUME = 0.2;
 
 // Create the tempVideoFolder if it doesn't exist
 if (!fs.existsSync(AUDIO_CLIPS_PATH)) {
