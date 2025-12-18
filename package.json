@@ -4,7 +4,7 @@
     "@discordjs/opus": "^0.10.0",
     "@discordjs/rest": "^2.0.1",
     "@discordjs/voice": "^0.18.0",
-    "@distube/ytdl-core": "^4.14.4",
+    "@distube/ytdl-core": "^4.16.12",
     "discord-api-types": "^0.38.18",
     "discord.js": "^14.14.1",
     "fluent-ffmpeg": "^2.1.3",
