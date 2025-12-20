@@ -11,7 +11,11 @@ const START_TIME_OPTION = 'start-time';
 const END_TIME_OPTION = 'end-time';
 
 // Initialize ytdlp instance
-const ytdlp = new YtDlp();
+// For Linux, specify the binary path
+const ytdlp = new YtDlp({
+    binaryPath: '/snap/bin/yt-dlp' // Common Linux installation path
+});
+
 
 // Helper function to reply to interaction, handling already-replied cases
 async function safeReply(interaction, content) {
