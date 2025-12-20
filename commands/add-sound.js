@@ -1,13 +1,34 @@
 
 const { SlashCommandBuilder } = require('discord.js');
 const ffmpeg = require('fluent-ffmpeg');
-const ytdl = require('@distube/ytdl-core');
+const { YtDlp } = require('ytdlp-nodejs');
 const fs = require('fs');
+const path = require('path');
 
 const MAX_CLIP_DURATION_S = 20;
 const YOUTUBE_URL_OPTION = 'youtube-url';
 const START_TIME_OPTION = 'start-time';
 const END_TIME_OPTION = 'end-time';
+
+// Initialize ytdlp instance
+const ytdlp = new YtDlp();
+
+// Helper function to reply to interaction, handling already-replied cases
+async function safeReply(interaction, content) {
+    try {
+        if (interaction.replied || interaction.deferred) {
+            return await interaction.editReply(content);
+        } else {
+            return await interaction.reply(content);
+        }
+    } catch (error) {
+        try {
+            return await interaction.followUp(content);
+        } catch (followUpError) {
+            console.error('Failed to reply to interaction:', error, followUpError);
+        }
+    }
+}
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -25,8 +46,8 @@ module.exports = {
         const duration = !!interaction.options.get(END_TIME_OPTION) ? 
             parseTimeToSeconds(interaction.options.get(END_TIME_OPTION).value) - startTime : MAX_CLIP_DURATION_S;
 
-        // Validate URL argument syntax
-        if (!youtubeUrl || !ytdl.validateURL(youtubeUrl)) {
+        // Validate URL argument syntax - basic URL validation
+        if (!youtubeUrl || (!youtubeUrl.includes('youtube.com') && !youtubeUrl.includes('youtu.be'))) {
             await interaction.reply('Please provide a valid YouTube URL.');
             return;
         }
@@ -41,29 +62,25 @@ module.exports = {
 
             await interaction.reply('Downloading audio clip...');
 
-            const videoInfo = await ytdl.getInfo(youtubeUrl);
-            if (!videoInfo) {
-                await interaction.reply('The provided YouTube URL does not exist or cannot be accessed.');
-                return;
-            }
-
-            // Download the video using ytdl-core
+            // Download the video using ytdlp-nodejs
             const fullAudioPath = `${interaction.audioClipsPath}/full_${interaction.user.tag}.mp4`;
-
             const trimmedAudioFilePath = `${interaction.audioClipsPath}/${interaction.user.tag}.mp4`;
 
-            const audioFile = ytdl(youtubeUrl, { filter: 'audioonly' });
+            try {
+                // Download audio using ytdlp-nodejs
+                await ytdlp.downloadAsync(youtubeUrl, {
+                    output: fullAudioPath,
+                    format: 'bestaudio[ext=m4a]/best[ext=mp4]/best', // Get best audio quality
+                    onProgress: (progress) => {
+                        if (progress && progress.percent) {
+                            process.stdout.clearLine();
+                            process.stdout.cursorTo(0);
+                            process.stdout.write(`Downloading... ${progress.percent.toFixed(2)}%`);
+                        }
+                    }
+                });
 
-            audioFile.pipe(fs.createWriteStream(fullAudioPath));
-
-            audioFile.on('progress', (chunkLength, downloaded, total) => {
-                const percent = downloaded / total * 100;
-                process.stdout.clearLine();
-                process.stdout.cursorTo(0);
-                process.stdout.write(`Downloading... ${percent.toFixed(2)}%`);
-            });
-
-            audioFile.on('finish', () => {
+                // Download completed, now trim with FFmpeg
                 // Create an FFmpeg command
                 const command = ffmpeg();
 
@@ -71,7 +88,7 @@ module.exports = {
                 command.output(trimmedAudioFilePath);
 
                 command.setStartTime(startTime);
-                command.setDuration(duration)
+                command.setDuration(duration);
 
                 // Run the FFmpeg command
                 command.on('end', () => {
@@ -88,19 +105,19 @@ module.exports = {
                     });
                 })
                     .on('error', (error) => {
-                        interaction.followUp('An error occurred while trimming .');
-                        console.error('Error:' + error);
+                        interaction.followUp('An error occurred while trimming.');
+                        console.error('Error:', error);
                     })
                     .run();
-            });
-
-            audioFile.on('error', (err) => {
-                interaction.followUp('An error occurred while downloading audio clip.');
-                console.error('Error during download:', err);
-            })
+            } catch (downloadError) {
+                const errorMsg = downloadError.message || String(downloadError);
+                await safeReply(interaction, `Error downloading audio clip: ${errorMsg}`);
+                console.error('Error downloading:', downloadError);
+            }
 
         } catch (error) {
-            await interaction.reply('An error occurred while registering audio clip.');
+            // Clean up temporary files even on error
+            await safeReply(interaction, 'An error occurred while registering audio clip.');
             console.error(error);
         }
     },
