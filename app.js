@@ -1,6 +1,6 @@
 const { TOKEN } = require('./config.json');
 const { Client, GatewayIntentBits, Events } = require('discord.js');
-const { joinVoiceChannel, createAudioPlayer, createAudioResource, NoSubscriberBehavior, getVoiceConnection } = require('@discordjs/voice');
+const { joinVoiceChannel, createAudioPlayer, createAudioResource, NoSubscriberBehavior, getVoiceConnection, entersState, VoiceConnectionStatus } = require('@discordjs/voice');
 const { REST } = require('@discordjs/rest');
 const { Routes } = require('discord-api-types/v9');
 const fs = require('fs');
@@ -148,7 +148,7 @@ client.on(Events.InteractionCreate, async interaction => {
 client.login(TOKEN);
 
 // Play sound for a user in a voice channel
-function playSoundForUser(user, channel) {
+async function playSoundForUser(user, channel) {
     const userTag = user.user.tag;
 
     var connection = getVoiceConnection(channel.guildId);
@@ -159,7 +159,7 @@ function playSoundForUser(user, channel) {
             guildId: channel.guild.id,
             adapterCreator: channel.guild.voiceAdapterCreator,
         });
-    } 
+    }
     else if (connection.joinConfig.channelId !== channel.id) {
         connection.destroy();
         connection = joinVoiceChannel({
@@ -167,6 +167,13 @@ function playSoundForUser(user, channel) {
             guildId: channel.guild.id,
             adapterCreator: channel.guild.voiceAdapterCreator,
         });
+    }
+
+    try {
+        await entersState(connection, VoiceConnectionStatus.Ready, 15_000);
+    } catch (err) {
+        console.error(`Voice connection not ready in time for ${userTag}:`, err.message);
+        return;
     }
 
     const audioPlayer = createAudioPlayer({
@@ -181,7 +188,7 @@ function playSoundForUser(user, channel) {
         connection.subscribe(audioPlayer);
         audioPlayer.play(audioResource);
         console.log(`Playing sound for ${userTag}`);
-    }, SOUND_PLAY_DELAY_MS)
+    }, SOUND_PLAY_DELAY_MS);
 }
 
 // Create an audio resource for a user from the audio clips folder
