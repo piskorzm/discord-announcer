@@ -58,20 +58,18 @@ client.once(Events.ClientReady, () => {
     console.log(`Logged in as ${client.user.tag}!`);
     initYtDlpOnStartup();
 
-    // Register app commands on server
-    /*try {
+    try {
         console.log('Started refreshing application commands.');
 
         const rest = new REST().setToken(TOKEN);
-        rest.put(
-            Routes.applicationCommands(client.user.id),
-            { body: commands },
-        ).then(() => {
-            console.log('Successfully reloaded application commands.');
-        }).catch(console.error);
+        rest.put(Routes.applicationCommands(client.user.id), { body: commands })
+            .then(() => {
+                console.log('Successfully reloaded application commands.');
+            })
+            .catch(console.error);
     } catch (error) {
         console.error(error);
-    }*/
+    }
 });
 
 

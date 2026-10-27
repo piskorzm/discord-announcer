@@ -18,6 +18,23 @@ node app.js
 
 You also need **FFmpeg** on the host (`sudo apt install ffmpeg` on Raspberry Pi OS).
 
+On each startup the bot **re-registers global slash commands** with Discord (so new options appear after you deploy). Restart the bot once after pulling command changes.
+
+## `/add-sound`
+
+Registers a short welcome clip from a YouTube URL (max 20 seconds unless you pass start/end times).
+
+| Option | Required | Description |
+|--------|----------|-------------|
+| `youtube-url` | yes | YouTube link |
+| `start-time` | no | Start time (`mm:ss` or seconds) |
+| `end-time` | no | End time (`mm:ss` or seconds) |
+| `for-user` | no | Discord member to register the sound **for** (delegated admin only; see below) |
+
+By default the sound is saved for whoever runs the command. **Only the account whose username is `zydoo`** may set `for-user` to another member (for example to register someone else’s entrance sound). Anyone else who sets `for-user` gets an ephemeral error and the clip is still saved for themselves.
+
+Optional env `ADD_SOUND_DELEGATE_USER_IDS` — comma-separated Discord user IDs that may also use `for-user` (in addition to `zydoo`).
+
 ## `/add-sound` and YouTube downloads
 
 The bot downloads audio with **yt-dlp**. It no longer uses the Snap-packaged `/snap/bin/yt-dlp` binary (that copy goes stale and lacks a JavaScript runtime for YouTube).
@@ -46,5 +63,6 @@ The first start may take a minute while yt-dlp is downloaded into `bin/`. No man
 |----------|---------|
 | `YTDLP_BINARY_PATH` | Use a specific yt-dlp binary instead of the auto-managed `bin/` copy |
 | `YTDLP_REFRESH_DAYS` | Days between automatic yt-dlp updates (default: `7`) |
+| `ADD_SOUND_DELEGATE_USER_IDS` | Extra Discord user IDs allowed to use `/add-sound` `for-user` |
 
 Harmless Raspberry Pi `ld.so.preload` / `libarmmem` messages are filtered out of Discord error replies.
