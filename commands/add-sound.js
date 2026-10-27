@@ -1,21 +1,13 @@
 
 const { SlashCommandBuilder } = require('discord.js');
 const ffmpeg = require('fluent-ffmpeg');
-const { YtDlp } = require('ytdlp-nodejs');
 const fs = require('fs');
-const path = require('path');
+const { downloadYoutubeAudio, sanitizeYtDlpError } = require('../lib/ytdlp-client');
 
 const MAX_CLIP_DURATION_S = 20;
 const YOUTUBE_URL_OPTION = 'youtube-url';
 const START_TIME_OPTION = 'start-time';
 const END_TIME_OPTION = 'end-time';
-
-// Initialize ytdlp instance
-// For Linux, specify the binary path
-const ytdlp = new YtDlp({
-    binaryPath: '/snap/bin/yt-dlp' // Common Linux installation path
-});
-
 
 // Helper function to reply to interaction, handling already-replied cases
 async function safeReply(interaction, content) {
@@ -71,17 +63,10 @@ module.exports = {
             const trimmedAudioFilePath = `${interaction.audioClipsPath}/${interaction.user.tag}.mp4`;
 
             try {
-                // Download audio using ytdlp-nodejs
-                await ytdlp.downloadAsync(youtubeUrl, {
-                    output: fullAudioPath,
-                    format: 'bestaudio[ext=m4a]/best[ext=mp4]/best', // Get best audio quality
-                    onProgress: (progress) => {
-                        if (progress && progress.percent) {
-                            process.stdout.clearLine();
-                            process.stdout.cursorTo(0);
-                            process.stdout.write(`Downloading... ${progress.percent.toFixed(2)}%`);
-                        }
-                    }
+                await downloadYoutubeAudio(youtubeUrl, fullAudioPath, (percent) => {
+                    process.stdout.clearLine();
+                    process.stdout.cursorTo(0);
+                    process.stdout.write(`Downloading... ${percent.toFixed(2)}%`);
                 });
 
                 // Download completed, now trim with FFmpeg
@@ -114,7 +99,9 @@ module.exports = {
                     })
                     .run();
             } catch (downloadError) {
-                const errorMsg = downloadError.message || String(downloadError);
+                const errorMsg = sanitizeYtDlpError(
+                    downloadError.message || String(downloadError)
+                );
                 await safeReply(interaction, `Error downloading audio clip: ${errorMsg}`);
                 console.error('Error downloading:', downloadError);
             }
