@@ -83,3 +83,5 @@ node_modules
 config.json
 /bin/yt-dlp*
 /bin/.yt-dlp-meta.json
+/bin/*.download.*
+/bin/*.bak
