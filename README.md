@@ -3,26 +3,40 @@ Discord bot that plays a registered sound for a user when they join a voice chan
 
 ## How to run
 
-Create a `config.json` file with a token entry:
-
-```json
-{ "token": "YOUR_DISCORD_TOKEN" }
-```
-
-Install dependencies and start the bot:
+Copy the example env file and set your bot token:
 
 ```bash
+cp .env.example .env
+# edit .env — set DISCORD_TOKEN (see migration table below if you used config.json before)
 npm install
 node app.js
 ```
 
 You also need **FFmpeg** on the host (`sudo apt install ffmpeg` on Raspberry Pi OS).
 
-On each startup the bot **re-registers global slash commands** with Discord (so new options appear after you deploy). Restart the bot once after pulling command changes.
+On each startup the bot **re-registers global slash commands** with Discord. You can also register commands without running the full bot:
+
+```bash
+node scripts/deploy-commands.js
+```
+
+### Migrating from `config.json`
+
+| Old `config.json` key | New `.env` variable |
+|----------------------|---------------------|
+| `token` | `DISCORD_TOKEN` |
+
+Example: `{ "token": "YOUR_DISCORD_TOKEN" }` becomes:
+
+```env
+DISCORD_TOKEN=YOUR_DISCORD_TOKEN
+```
+
+Do not commit `.env` (it is gitignored). See `.env.example` for all supported variables.
 
 ## yt-dlp (managed by the bot)
 
-The bot **downloads and updates yt-dlp itself** into the project `bin/` directory. It does **not** use a system or pip-installed `yt-dlp` unless you set **`YTDLP_BINARY_PATH`**.
+The bot **downloads and updates yt-dlp itself** into the project `bin/` directory. It does **not** use a system or pip-installed `yt-dlp` unless you set **`YTDLP_BINARY_PATH`** in `.env`.
 
 - About every **24 hours** (startup and before `/add-sound`), it checks [the latest GitHub release](https://github.com/yt-dlp/yt-dlp/releases/latest) and downloads **only if** the managed copy is missing or older than that release.
 - If GitHub is unreachable, it keeps the existing `bin/` copy.
@@ -38,35 +52,23 @@ At startup you should see lines like:
 
 ### Python for the zipapp on the Pi (Bullseye / Python 3.9)
 
-Latest yt-dlp needs a newer Python than `apt install python3`. Install **3.12** side-by-side with [uv](https://github.com/astral-sh/uv) (puts `python3.12` in `~/.local/bin`):
+Latest yt-dlp needs a newer Python than `apt install python3`. Install **3.12** side-by-side with [uv](https://github.com/astral-sh/uv):
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ~/.local/bin/uv python install 3.12
 ```
 
-Ensure `~/.local/bin` is on your `PATH`, then restart the bot. The bot picks the **newest** Python on `PATH` / `~/.local/bin` / uv’s `~/.local/share/uv/python/*/bin/` that meets the release minimum (`python3.14` … `python3.11`, then `python3`).
-
-Optional env **`YTDLP_PYTHON`** — full path to the interpreter for the zipapp (overrides auto-selection).
+Ensure `~/.local/bin` is on your `PATH`, then restart the bot. The bot uses **`uv python find`**, uv’s install directory, and `PATH` / `~/.local/bin` to pick a suitable interpreter. Set **`YTDLP_PYTHON`** in `.env` to pin one explicitly.
 
 ### Remove an old pip-installed yt-dlp (recommended on the Pi)
-
-So the bot is not confused with an outdated pip copy on your `PATH`:
 
 ```bash
 pip3 uninstall yt-dlp
 # if needed on newer Debian/Raspberry Pi OS:
 pip3 uninstall yt-dlp --break-system-packages
-# or: sudo pip3 uninstall yt-dlp
-
 rm -f ~/.local/bin/yt-dlp
 ```
-
-Then restart the bot; it will populate `bin/` on its own.
-
-Optional env **`YTDLP_BINARY_PATH`** — force a specific yt-dlp executable instead of the managed `bin/` copy.
-
-Optional env **`YTDLP_PYTHON`** — force the Python interpreter used for the managed zipapp (also read from a project **`.env`** file if not already set in the environment).
 
 ## `/add-sound`
 
@@ -79,9 +81,9 @@ Registers a short welcome clip from a YouTube URL (max 20 seconds unless you pas
 | `end-time` | no | End time (`mm:ss` or seconds) |
 | `for-user` | no | Discord member to register the sound **for** (delegated admin only; see below) |
 
-By default the sound is saved for whoever runs the command. **Only the account whose username is `zydoo`** may set `for-user` to another member (for example to register someone else’s entrance sound). Anyone else who sets `for-user` gets an ephemeral error and the clip is still saved for themselves.
+By default the sound is saved for whoever runs the command. **Only the account whose username is `zydoo`** may set `for-user` to another member. Anyone else who sets `for-user` gets an ephemeral error and the clip is still saved for themselves.
 
-Optional env **`ADD_SOUND_DELEGATE_USER_IDS`** — comma-separated Discord user IDs that may also use `for-user` (in addition to `zydoo`).
+Set **`ADD_SOUND_DELEGATE_USER_IDS`** in `.env` (comma-separated Discord user IDs) to allow additional delegates.
 
 Harmless Raspberry Pi `ld.so.preload` / `libarmmem` messages are filtered out of Discord error replies.
 
@@ -91,5 +93,6 @@ Harmless Raspberry Pi `ld.so.preload` / `libarmmem` messages are filtered out of
 cd /path/to/discord-announcer
 git pull
 npm install
+cp -n .env.example .env   # skip if you already have .env
 node app.js
 ```
