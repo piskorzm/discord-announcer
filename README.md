@@ -66,7 +66,7 @@ Then restart the bot; it will populate `bin/` on its own.
 
 Optional env **`YTDLP_BINARY_PATH`** — force a specific yt-dlp executable instead of the managed `bin/` copy.
 
-Optional env **`YTDLP_PYTHON`** — force the Python interpreter used for the managed zipapp.
+Optional env **`YTDLP_PYTHON`** — force the Python interpreter used for the managed zipapp (also read from a project **`.env`** file if not already set in the environment).
 
 ## `/add-sound`
 
