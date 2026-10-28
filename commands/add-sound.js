@@ -1,21 +1,18 @@
 
 const { SlashCommandBuilder } = require('discord.js');
 const ffmpeg = require('fluent-ffmpeg');
-const { YtDlp } = require('ytdlp-nodejs');
 const fs = require('fs');
-const path = require('path');
+const { downloadYoutubeAudio, sanitizeYtDlpError } = require('../lib/ytdlp-client');
+const {
+    canSetSoundForOtherUsers,
+    DEFAULT_DELEGATE_USERNAME,
+} = require('../lib/add-sound-delegate');
 
 const MAX_CLIP_DURATION_S = 20;
 const YOUTUBE_URL_OPTION = 'youtube-url';
 const START_TIME_OPTION = 'start-time';
 const END_TIME_OPTION = 'end-time';
-
-// Initialize ytdlp instance
-// For Linux, specify the binary path
-const ytdlp = new YtDlp({
-    binaryPath: '/snap/bin/yt-dlp' // Common Linux installation path
-});
-
+const FOR_USER_OPTION = 'for-user';
 
 // Helper function to reply to interaction, handling already-replied cases
 async function safeReply(interaction, content) {
@@ -40,17 +37,26 @@ module.exports = {
         .setDescription('Adds your welcome sound to the server! Max duration: ' + MAX_CLIP_DURATION_S + 's')
         .addStringOption(option => option.setName(YOUTUBE_URL_OPTION).setDescription('Youtube video source for your sound').setRequired(true))
         .addStringOption(option => option.setName(START_TIME_OPTION).setDescription('Start point (optional). Format: mm:ss.mmm'))
-        .addStringOption(option => option.setName(END_TIME_OPTION).setDescription('End point (optional). Format: mm:ss.mmm')),
+        .addStringOption(option => option.setName(END_TIME_OPTION).setDescription('End point (optional). Format: mm:ss.mmm'))
+        .addUserOption(option =>
+            option
+                .setName(FOR_USER_OPTION)
+                .setDescription(
+                    `Register the sound for another member (only @${DEFAULT_DELEGATE_USERNAME} may use this)`
+                )
+                .setRequired(false)),
     async execute(interaction) {
         console.log("interaction.options");
         console.log(interaction.options.get(YOUTUBE_URL_OPTION));
         const youtubeUrl = interaction.options.get(YOUTUBE_URL_OPTION).value;
-        const startTime = !!interaction.options.get(START_TIME_OPTION) ? 
-            parseTimeToSeconds(interaction.options.get(START_TIME_OPTION).value) : 0;
-        const duration = !!interaction.options.get(END_TIME_OPTION) ? 
-            parseTimeToSeconds(interaction.options.get(END_TIME_OPTION).value) - startTime : MAX_CLIP_DURATION_S;
+        const requestedForUser = interaction.options.getUser(FOR_USER_OPTION);
+        const startTime = !!interaction.options.get(START_TIME_OPTION)
+            ? parseTimeToSeconds(interaction.options.get(START_TIME_OPTION).value)
+            : 0;
+        const duration = !!interaction.options.get(END_TIME_OPTION)
+            ? parseTimeToSeconds(interaction.options.get(END_TIME_OPTION).value) - startTime
+            : MAX_CLIP_DURATION_S;
 
-        // Validate URL argument syntax - basic URL validation
         if (!youtubeUrl || (!youtubeUrl.includes('youtube.com') && !youtubeUrl.includes('youtu.be'))) {
             await interaction.reply('Please provide a valid YouTube URL.');
             return;
@@ -61,27 +67,40 @@ module.exports = {
             return;
         }
 
+        let soundOwner = interaction.user;
+        if (requestedForUser && requestedForUser.id !== interaction.user.id) {
+            if (!canSetSoundForOtherUsers(interaction.user)) {
+                await interaction.reply({
+                    content:
+                        `You cannot set a welcome sound for someone else. Only **${DEFAULT_DELEGATE_USERNAME}** may use the \`${FOR_USER_OPTION}\` option. Your sound will be saved for **you**.`,
+                    ephemeral: true,
+                });
+                await interaction.followUp('Downloading audio clip...');
+            } else {
+                soundOwner = requestedForUser;
+                await interaction.reply(
+                    `Downloading audio clip for **${soundOwner.tag}**...`
+                );
+            }
+        } else if (requestedForUser) {
+            soundOwner = requestedForUser;
+            await interaction.reply('Downloading audio clip...');
+        } else {
+            await interaction.reply('Downloading audio clip...');
+        }
+
+        const ownerTag = soundOwner.tag;
+
         // Fetch video info to further verify if the video exists
         try {
-
-            await interaction.reply('Downloading audio clip...');
-
-            // Download the video using ytdlp-nodejs
-            const fullAudioPath = `${interaction.audioClipsPath}/full_${interaction.user.tag}.mp4`;
-            const trimmedAudioFilePath = `${interaction.audioClipsPath}/${interaction.user.tag}.mp4`;
+            const fullAudioPath = `${interaction.audioClipsPath}/full_${ownerTag}.mp4`;
+            const trimmedAudioFilePath = `${interaction.audioClipsPath}/${ownerTag}.mp4`;
 
             try {
-                // Download audio using ytdlp-nodejs
-                await ytdlp.downloadAsync(youtubeUrl, {
-                    output: fullAudioPath,
-                    format: 'bestaudio[ext=m4a]/best[ext=mp4]/best', // Get best audio quality
-                    onProgress: (progress) => {
-                        if (progress && progress.percent) {
-                            process.stdout.clearLine();
-                            process.stdout.cursorTo(0);
-                            process.stdout.write(`Downloading... ${progress.percent.toFixed(2)}%`);
-                        }
-                    }
+                await downloadYoutubeAudio(youtubeUrl, fullAudioPath, (percent) => {
+                    process.stdout.clearLine();
+                    process.stdout.cursorTo(0);
+                    process.stdout.write(`Downloading... ${percent.toFixed(2)}%`);
                 });
 
                 // Download completed, now trim with FFmpeg
@@ -96,8 +115,14 @@ module.exports = {
 
                 // Run the FFmpeg command
                 command.on('end', () => {
-                    console.log(`Trimming complete! Sound registered for user: ${interaction.user.tag}, url: ${youtubeUrl}`);
-                    interaction.followUp('Your welcome sound has been registered!');
+                    console.log(
+                        `Trimming complete! Sound registered for user: ${ownerTag}, url: ${youtubeUrl}`
+                    );
+                    const successMessage =
+                        soundOwner.id === interaction.user.id
+                            ? 'Your welcome sound has been registered!'
+                            : `Welcome sound registered for **${ownerTag}**.`;
+                    interaction.followUp(successMessage);
 
                     // Remove the full audio
                     fs.unlink(fullAudioPath, (error) => {
@@ -114,7 +139,9 @@ module.exports = {
                     })
                     .run();
             } catch (downloadError) {
-                const errorMsg = downloadError.message || String(downloadError);
+                const errorMsg = sanitizeYtDlpError(
+                    downloadError.message || String(downloadError)
+                );
                 await safeReply(interaction, `Error downloading audio clip: ${errorMsg}`);
                 console.error('Error downloading:', downloadError);
             }

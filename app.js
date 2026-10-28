@@ -4,6 +4,7 @@ const { joinVoiceChannel, createAudioPlayer, createAudioResource, NoSubscriberBe
 const { REST } = require('@discordjs/rest');
 const { Routes } = require('discord-api-types/v9');
 const fs = require('fs');
+const { initYtDlpOnStartup } = require('./lib/ytdlp-client');
 
 const COMMANDS_FOLDER_PATH = './commands';
 const AUDIO_CLIPS_PATH = './audio-clips';
@@ -55,21 +56,20 @@ for (const file of commandFiles) {
 
 client.once(Events.ClientReady, () => {
     console.log(`Logged in as ${client.user.tag}!`);
+    initYtDlpOnStartup();
 
-    // Register app commands on server
-    /*try {
+    try {
         console.log('Started refreshing application commands.');
 
         const rest = new REST().setToken(TOKEN);
-        rest.put(
-            Routes.applicationCommands(client.user.id),
-            { body: commands },
-        ).then(() => {
-            console.log('Successfully reloaded application commands.');
-        }).catch(console.error);
+        rest.put(Routes.applicationCommands(client.user.id), { body: commands })
+            .then(() => {
+                console.log('Successfully reloaded application commands.');
+            })
+            .catch(console.error);
     } catch (error) {
         console.error(error);
-    }*/
+    }
 });
 
 
