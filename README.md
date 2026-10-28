@@ -40,26 +40,31 @@ The bot **downloads and updates yt-dlp itself** into the project `bin/` director
 
 - About every **24 hours** (startup and before `/add-sound`), it checks [the latest GitHub release](https://github.com/yt-dlp/yt-dlp/releases/latest) and downloads **only if** the managed copy is missing or older than that release.
 - If GitHub is unreachable, it keeps the existing `bin/` copy.
-- On **32-bit ARM** (`process.arch` `arm`), it tries the native `yt-dlp_linux_armv7l` binary first; if that fails to run, it switches to the platform-independent **`yt-dlp` zipapp** run with a compatible **Python** (minimum version from the release’s `pyproject.toml`, often **3.11+** while Raspberry Pi OS Bullseye still ships Python 3.9).
+- On **32-bit ARM** (`process.arch` `arm`), it tries the native `yt-dlp_linux_armv7l` binary first; if that fails to run, it switches to the platform-independent **`yt-dlp` zipapp** executed with **`YTDLP_PYTHON`** from `.env` (minimum version from the release’s `pyproject.toml`, often **3.11+** while Raspberry Pi OS Bullseye still ships Python 3.9).
 - Optional CLI flags (e.g. `--js-runtimes`) are passed only when supported (`yt-dlp --help` is parsed once per process).
 
-At startup you should see lines like:
+At startup you may see a line like:
 
-`Managed yt-dlp: …/bin/yt-dlp-zipapp-wrapper (2026.10.26) — already latest`  
-`yt-dlp zipapp interpreter: /home/pi/.local/bin/python3.12 (Python 3.12.x)`
+`Managed yt-dlp: …/bin/yt-dlp-zipapp-wrapper (2026.10.26) — already latest`
 
 **No cron is required** for yt-dlp updates.
 
 ### Python for the zipapp on the Pi (Bullseye / Python 3.9)
 
-Latest yt-dlp needs a newer Python than `apt install python3`. Install **3.12** side-by-side with [uv](https://github.com/astral-sh/uv):
+When the bot uses the zipapp, set **`YTDLP_PYTHON`** in `.env` to a full path to a new enough interpreter (the bot does not search `PATH` or auto-detect via uv). Latest yt-dlp needs a newer Python than `apt install python3`. A common approach is [uv](https://github.com/astral-sh/uv):
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ~/.local/bin/uv python install 3.12
 ```
 
-Ensure `~/.local/bin` is on your `PATH`, then restart the bot. The bot uses **`uv python find`**, uv’s install directory, and `PATH` / `~/.local/bin` to pick a suitable interpreter. Set **`YTDLP_PYTHON`** in `.env` to pin one explicitly.
+Then in `.env`:
+
+```env
+YTDLP_PYTHON=/home/pi/.local/bin/python3.12
+```
+
+Restart the bot after changing `.env`.
 
 ### Remove an old pip-installed yt-dlp (recommended on the Pi)
 
