@@ -1,4 +1,8 @@
-const { TOKEN } = require('./config.json');
+require('dotenv').config({ path: require('path').join(__dirname, '.env') });
+
+const { validateEnv } = require('./lib/env');
+validateEnv();
+
 const { Client, GatewayIntentBits, Events } = require('discord.js');
 const { joinVoiceChannel, createAudioPlayer, createAudioResource, NoSubscriberBehavior, getVoiceConnection, entersState, VoiceConnectionStatus } = require('@discordjs/voice');
 const { REST } = require('@discordjs/rest');
@@ -61,7 +65,7 @@ client.once(Events.ClientReady, () => {
     try {
         console.log('Started refreshing application commands.');
 
-        const rest = new REST().setToken(TOKEN);
+        const rest = new REST().setToken(process.env.DISCORD_TOKEN);
         rest.put(Routes.applicationCommands(client.user.id), { body: commands })
             .then(() => {
                 console.log('Successfully reloaded application commands.');
@@ -145,7 +149,7 @@ client.on(Events.InteractionCreate, async interaction => {
 });
 
 // Log in to Discord with bot token
-client.login(TOKEN);
+client.login(process.env.DISCORD_TOKEN);
 
 // Play sound for a user in a voice channel
 async function playSoundForUser(user, channel) {
