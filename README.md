@@ -39,7 +39,7 @@ Optional env `ADD_SOUND_DELEGATE_USER_IDS` — comma-separated Discord user IDs 
 
 The bot downloads audio with **yt-dlp**. It no longer uses the Snap-packaged `/snap/bin/yt-dlp` binary (that copy goes stale and lacks a JavaScript runtime for YouTube).
 
-On startup (and again about once a week) the bot downloads or refreshes an **ARM-compatible** yt-dlp binary into the project `bin/` directory from the [official GitHub release](https://github.com/yt-dlp/yt-dlp/releases/latest) (`yt-dlp_linux_armv7l` on 32-bit Pi where Node reports `process.arch` as `arm`, `yt-dlp_linux_aarch64` on 64-bit ARM, `yt-dlp_linux` on x64). If a download is not available, it falls back to `yt-dlp` on your `PATH` or `python3 -m yt_dlp`.
+On startup (and again about once a week) the bot downloads or refreshes yt-dlp into `bin/`. On 32-bit Pi (`process.arch` `arm`), it tries the native `yt-dlp_linux_armv7l` binary first; if that executable fails (older ARMv6 / glibc), it removes it, downloads the platform-independent **`yt-dlp` zipapp** from GitHub, and runs it with **python3 >= 3.9**. That zipapp preference is remembered in `bin/.yt-dlp-meta.json` so later starts skip the broken native binary. Resolution order: `YTDLP_BINARY_PATH` → working native → managed zipapp → `yt-dlp` on `PATH` → `python3 -m yt_dlp`.
 
 The bot passes **Node** (the same runtime as `node app.js`) to yt-dlp as `--js-runtimes node:<path>`. If `deno` is installed on the Pi, it is registered as a fallback runtime.
 
