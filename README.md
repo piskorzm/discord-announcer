@@ -16,34 +16,41 @@ npm install
 node app.js
 ```
 
-You also need **FFmpeg** on the host (`sudo apt install ffmpeg` on Raspberry Pi OS) and **yt-dlp** (see below).
+You also need **FFmpeg** on the host (`sudo apt install ffmpeg` on Raspberry Pi OS).
 
 On each startup the bot **re-registers global slash commands** with Discord (so new options appear after you deploy). Restart the bot once after pulling command changes.
 
-## yt-dlp (required for `/add-sound`)
+## yt-dlp (managed by the bot)
 
-The bot does **not** download or update yt-dlp itself. Install and update it on the host with pip:
+The bot **downloads and updates yt-dlp itself** into the project `bin/` directory. It does **not** use a system or pip-installed `yt-dlp` unless you set **`YTDLP_BINARY_PATH`**.
+
+- About every **24 hours** (startup and before `/add-sound`), it checks [the latest GitHub release](https://github.com/yt-dlp/yt-dlp/releases/latest) and downloads **only if** the managed copy is missing or older than that release.
+- If GitHub is unreachable, it keeps the existing `bin/` copy.
+- On **32-bit ARM** (`process.arch` `arm`), it tries the native `yt-dlp_linux_armv7l` binary first; if that fails to run, it switches to the platform-independent **`yt-dlp` zipapp** via `python3` (minimum Python is read from the release’s `pyproject.toml`).
+- Optional CLI flags (e.g. `--js-runtimes`) are passed only when supported (`yt-dlp --help` is parsed once per process).
+
+At startup you should see a line like:
+
+`Managed yt-dlp: …/bin/yt-dlp-zipapp-wrapper (2026.10.26) — already latest`
+
+**No cron is required** for yt-dlp updates.
+
+### Remove an old pip-installed yt-dlp (recommended on the Pi)
+
+So the bot is not confused with an outdated pip copy on your `PATH`:
 
 ```bash
-pip3 install -U yt-dlp
+pip3 uninstall yt-dlp
+# if needed on newer Debian/Raspberry Pi OS:
+pip3 uninstall yt-dlp --break-system-packages
+# or: sudo pip3 uninstall yt-dlp
+
+rm -f ~/.local/bin/yt-dlp
 ```
 
-Ensure `~/.local/bin` is on your `PATH` (typical for pip `--user` installs), or set **`YTDLP_BINARY_PATH`** to the full path of the `yt-dlp` executable.
+Then restart the bot; it will populate `bin/` on its own.
 
-At startup the bot logs the resolved command and `yt-dlp --version`. If nothing is found, it logs:
-
-`Install yt-dlp with: pip3 install -U yt-dlp`
-
-**Keep yt-dlp current** — YouTube breaks old versions often. Upgrade manually when downloads fail, or use a weekly cron on the Pi:
-
-```bash
-# crontab -e
-0 4 * * 0 pip3 install -U yt-dlp
-```
-
-Resolution order: `YTDLP_BINARY_PATH` → `yt-dlp` on `PATH` (including `~/.local/bin`) → `python3 -m yt_dlp`.
-
-Optional flags (such as `--js-runtimes` for YouTube) are only passed if your installed yt-dlp supports them (`yt-dlp --help` is checked once at runtime).
+Optional env **`YTDLP_BINARY_PATH`** — force a specific yt-dlp executable instead of the managed `bin/` copy.
 
 ## `/add-sound`
 
@@ -60,8 +67,6 @@ By default the sound is saved for whoever runs the command. **Only the account w
 
 Optional env **`ADD_SOUND_DELEGATE_USER_IDS`** — comma-separated Discord user IDs that may also use `for-user` (in addition to `zydoo`).
 
-Optional env **`YTDLP_BINARY_PATH`** — explicit path to the `yt-dlp` executable.
-
 Harmless Raspberry Pi `ld.so.preload` / `libarmmem` messages are filtered out of Discord error replies.
 
 ## Raspberry Pi deploy / upgrade
@@ -70,6 +75,5 @@ Harmless Raspberry Pi `ld.so.preload` / `libarmmem` messages are filtered out of
 cd /path/to/discord-announcer
 git pull
 npm install
-pip3 install -U yt-dlp
 node app.js
 ```
