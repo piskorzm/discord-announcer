@@ -26,14 +26,28 @@ The bot **downloads and updates yt-dlp itself** into the project `bin/` director
 
 - About every **24 hours** (startup and before `/add-sound`), it checks [the latest GitHub release](https://github.com/yt-dlp/yt-dlp/releases/latest) and downloads **only if** the managed copy is missing or older than that release.
 - If GitHub is unreachable, it keeps the existing `bin/` copy.
-- On **32-bit ARM** (`process.arch` `arm`), it tries the native `yt-dlp_linux_armv7l` binary first; if that fails to run, it switches to the platform-independent **`yt-dlp` zipapp** via `python3` (minimum Python is read from the release’s `pyproject.toml`).
+- On **32-bit ARM** (`process.arch` `arm`), it tries the native `yt-dlp_linux_armv7l` binary first; if that fails to run, it switches to the platform-independent **`yt-dlp` zipapp** run with a compatible **Python** (minimum version from the release’s `pyproject.toml`, often **3.11+** while Raspberry Pi OS Bullseye still ships Python 3.9).
 - Optional CLI flags (e.g. `--js-runtimes`) are passed only when supported (`yt-dlp --help` is parsed once per process).
 
-At startup you should see a line like:
+At startup you should see lines like:
 
-`Managed yt-dlp: …/bin/yt-dlp-zipapp-wrapper (2026.10.26) — already latest`
+`Managed yt-dlp: …/bin/yt-dlp-zipapp-wrapper (2026.10.26) — already latest`  
+`yt-dlp zipapp interpreter: /home/pi/.local/bin/python3.12 (Python 3.12.x)`
 
 **No cron is required** for yt-dlp updates.
+
+### Python for the zipapp on the Pi (Bullseye / Python 3.9)
+
+Latest yt-dlp needs a newer Python than `apt install python3`. Install **3.12** side-by-side with [uv](https://github.com/astral-sh/uv) (puts `python3.12` in `~/.local/bin`):
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+~/.local/bin/uv python install 3.12
+```
+
+Ensure `~/.local/bin` is on your `PATH`, then restart the bot. The bot picks the **newest** Python on `PATH` / `~/.local/bin` / uv’s `~/.local/share/uv/python/*/bin/` that meets the release minimum (`python3.14` … `python3.11`, then `python3`).
+
+Optional env **`YTDLP_PYTHON`** — full path to the interpreter for the zipapp (overrides auto-selection).
 
 ### Remove an old pip-installed yt-dlp (recommended on the Pi)
 
@@ -51,6 +65,8 @@ rm -f ~/.local/bin/yt-dlp
 Then restart the bot; it will populate `bin/` on its own.
 
 Optional env **`YTDLP_BINARY_PATH`** — force a specific yt-dlp executable instead of the managed `bin/` copy.
+
+Optional env **`YTDLP_PYTHON`** — force the Python interpreter used for the managed zipapp.
 
 ## `/add-sound`
 
